@@ -1359,3 +1359,137 @@ function escapeHtml(str) {
     "'": "&#39;"
   }[m]));
 }
+
+// --- บล็อกเสริมต่อท้าย: เลข 1-9 มี 0 นำหน้าเป็น 2 หลัก + ทับ (/) ปกติ + พิมพ์วันที่เร็วขึ้น + ปุ่มตอบสนองชัวร์ ---
+(function () {
+  if (typeof wordsToNumberDigits === "function") {
+    const _origWordsToNumberDigits = wordsToNumberDigits;
+    wordsToNumberDigits = function (text) {
+      let s = _origWordsToNumberDigits(text);
+      s = s.replace(/\b([12])\s+000\b/g, (_, d) => `${d}000`);
+      s = s.replace(/\b20\s+00\b/g, "2000");
+      return s;
+    };
+  }
+
+  formatDateWithSlash = function (text) {
+    const rawStr = String(text || "").trim();
+    if (!rawStr) return "";
+
+    const digitsOnly = rawStr.replace(/\D/g, "");
+    if (/^[\/\-.\s\d]+$/.test(rawStr) && !/[\/\-]/.test(rawStr) && digitsOnly.length === 8) {
+      return `${pad2(digitsOnly.slice(0, 2))}/${pad2(digitsOnly.slice(2, 4))}/${digitsOnly.slice(4, 8)}`;
+    }
+
+    const segs = extractDateSegments(rawStr);
+    if (segs.length === 0) {
+      return rawStr.replace(/\s+/g, " ").trim();
+    }
+    if (segs.length === 1) {
+      return segs[0].length <= 2 ? pad2(segs[0]) : segs[0];
+    }
+    if (segs.length === 2) {
+      return `${pad2(segs[0])}/${pad2(segs[1])}`;
+    }
+
+    const day = pad2(segs[0]);
+    const month = pad2(segs[1]);
+    const year = normalizeYear(segs[2]);
+    const rest = segs.slice(3).map((x) => x.trim()).filter(Boolean);
+    const base = year ? `${day}/${month}/${year}` : `${day}/${month}`;
+    return rest.length > 0 ? `${base}/${rest.join("/")}` : base;
+  };
+
+  function bindFastDateInputById(id) {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.fastDateBound === "1") return;
+    el.dataset.fastDateBound = "1";
+
+    el.addEventListener("input", () => {
+      const val = el.value;
+      const digits = val.replace(/\D/g, "");
+      if (!/[\/\-]/.test(val) && digits.length === 8) {
+        el.value = formatDateWithSlash(digits);
+        return;
+      }
+      const parts = val.split("/");
+      if (parts.length >= 2) {
+        const d = parts[0].trim() ? pad2(parts[0]) : "";
+        const m = parts[1].trim() ? pad2(parts[1]) : "";
+        const y = parts.slice(2).join("/").replace(/[^\d]/g, "").slice(0, 4);
+        let nextVal = d;
+        if (parts.length === 2) {
+          nextVal = `${d}/${m}`;
+        } else if (parts.length >= 3) {
+          nextVal = y ? `${d}/${m}/${y}` : `${d}/${m}/`;
+        }
+        if (nextVal && nextVal !== val) {
+          el.value = nextVal;
+        }
+      }
+    });
+
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        const formatted = formatDateWithSlash(el.value);
+        if (formatted) {
+          el.value = formatted;
+        }
+      }
+    });
+
+    el.addEventListener("blur", () => {
+      if (el.value.trim()) {
+        el.value = formatDateWithSlash(el.value);
+      }
+    });
+  }
+
+  function initAllFastDates() {
+    bindFastDateInputById("examDate");
+    bindFastDateInputById("birthDate");
+  }
+
+  initAllFastDates();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initAllFastDates);
+  }
+
+  // รองรับปุ่มที่กำหนด data-action หรือมีคำว่า บันทึก / เพิ่มแถว / พิมพ์ / ดาวน์โหลดCSV โดยไม่กระทบ onclick เดิม
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("button, [role='button']");
+    if (!btn) return;
+    if (btn.getAttribute("onclick")) return;
+
+    const action = (btn.dataset.action || "").trim();
+    if (action === "addRow" && typeof addRow === "function") {
+      e.preventDefault();
+      addRow();
+      return;
+    }
+    if (action === "openPrintPage" && typeof openPrintPage === "function") {
+      e.preventDefault();
+      openPrintPage();
+      return;
+    }
+    if (action === "downloadCSV" && typeof downloadCSV === "function") {
+      e.preventDefault();
+      downloadCSV();
+      return;
+    }
+    if (action === "clearAll" && typeof clearAll === "function") {
+      e.preventDefault();
+      clearAll();
+      return;
+    }
+    if (action === "manualRefreshFromCloud" && typeof manualRefreshFromCloud === "function") {
+      e.preventDefault();
+      manualRefreshFromCloud();
+      return;
+    }
+    if (action === "copyAllRowsQueue" && typeof copyAllRowsQueue === "function") {
+      e.preventDefault();
+      copyAllRowsQueue(btn);
+    }
+  });
+})();

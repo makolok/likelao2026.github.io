@@ -330,19 +330,41 @@
         margin: 8px 0 7px !important;
       }
       .checkbox-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 5.5px 20px !important;
         margin-bottom: 8px !important;
         font-size: 13.2px !important;
+        width: 100% !important;
+      }
+      .checkbox-grid > .chk-item {
+        min-width: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+      }
+      .chk-with-dot {
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
+      }
+      .chk-with-dot .dot-field {
+        min-width: 40px !important;
       }
       .closing-note {
         font-size: 13.2px !important;
         margin: 5px 0 6px !important;
       }
       .date-sign-wrap {
+        display: flex !important;
+        justify-content: flex-end !important;
+        width: 100% !important;
         margin-top: 2px !important;
         margin-bottom: 6px !important;
       }
       .sign-block {
+        width: 310px !important;
+        max-width: 100% !important;
+        margin-left: auto !important;
+        text-align: center !important;
         font-size: 13.2px !important;
       }
       .sign-role {
@@ -562,4 +584,4 @@
 
   <script src="petition_print.js"></script>
 </body>
-</html>
+</html>[cite: 24]
