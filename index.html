@@ -146,6 +146,12 @@
       border-color: #1d4ed8;
       font-weight: bold;
     }
+    .btn-print-nav {
+      background: #0f766e;
+      color: #fff;
+      border-color: #115e59;
+      font-weight: bold;
+    }
     .btn-danger {
       background: #dc2626;
       color: #fff;
@@ -162,6 +168,15 @@
     .copy-btn.copied {
       background: #0f766e;
     }
+    .row-print-btn {
+      padding: 5px 9px;
+      font-size: 12px;
+      background: #0f766e;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      margin-left: 4px;
+    }
     .actions {
       display: flex;
       flex-wrap: wrap;
@@ -175,6 +190,46 @@
       margin-bottom: 8px;
       font-weight: bold;
       font-size: 16px;
+    }
+    .list-filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+    }
+    .list-search-input {
+      flex: 1;
+      min-width: 210px;
+      padding: 8px 11px !important;
+      font-size: 15px !important;
+      background: #fff;
+    }
+    .btn-filter-action {
+      padding: 7px 11px;
+      font-size: 13px;
+      background: #2563eb;
+      color: #fff;
+      border-color: #1d4ed8;
+      font-weight: bold;
+    }
+    .btn-filter-print {
+      padding: 7px 11px;
+      font-size: 13px;
+      background: #0f766e;
+      color: #fff;
+      border-color: #115e59;
+      font-weight: bold;
+    }
+    .btn-filter-clear {
+      padding: 7px 10px;
+      font-size: 13px;
+      background: #fff;
+      color: #334155;
     }
     .table-wrap {
       overflow-x: auto;
@@ -196,7 +251,6 @@
       background: #f4f4f4;
     }
 
-    /* ปรับสำหรับโทรศัพท์มือถือและแท็บเล็ต: เรียง 1 แถวเต็มจอ ตัวหนังสือใหญ่กดง่าย */
     @media (max-width: 900px) {
       body {
         padding: 0 12px 36px;
@@ -242,6 +296,9 @@
         padding: 13px;
         font-size: 17px;
       }
+      .list-filter-bar button {
+        width: 100%;
+      }
     }
   </style>
 </head>
@@ -254,7 +311,7 @@
       <span id="connectionBadge" class="status-badge connecting">ກຳລັງເຊື່ອມຕໍ່</span>
       <span id="connectionSummaryText">ກຳລັງເຊື່ອມຕໍ່... | ທັງໝົດ: 0 ຄົນ</span>
     </div>
-    <button type="button" class="sync-refresh-btn" onclick="manualRefreshFromCloud()">🔄 รีเฟรช</button>
+    <button type="button" class="sync-refresh-btn" onclick="manualRefreshFromCloud()">🔄 ລີເຟດ</button>
   </div>
 
   <div class="form-grid">
@@ -345,7 +402,7 @@
     <div class="row">
       <label>ຊຸດ:</label>
       <select id="batchSet">
-        <option value="">-- ເລືອກຊຸດ (14-30) --</option>
+        <option value="">-- ເລືອກຊຸດ --</option>
         <option value="14">14</option>
         <option value="15">15</option>
         <option value="16">16</option>
@@ -377,7 +434,7 @@
     <div class="row">
       <label>ປະ​ເພດ:</label>
       <select id="licenseType">
-        <option value="">-- ເລືອກປະເພດ --</option>
+        <option value="">-- ເລືອກປະເພດໃບຂັບຂີ່ --</option>
         <option value="A">A</option>
         <option value="B">B</option>
         <option value="C">C</option>
@@ -390,7 +447,7 @@
 
     <div class="row">
       <label>ຊື່ໂຮງຮຽນ:</label>
-      <input id="schoolName" type="text" value="ໂຮງຮຽນສອນຂັບລົດບ້ານສາມັກຄີ" readonly />
+      <input id="schoolName" type="text" value="ຮຮ.ສອນຂັບລົດບ້ານສາມັກຄີ" readonly />
     </div>
 
     <div class="row full">
@@ -400,8 +457,9 @@
   </div>
 
   <div class="actions">
-    <button type="button" class="btn-primary" onclick="addRow()">➕ ເພີ່ມເປັນແຖວ</button>
-    <button type="button" class="btn-queue" onclick="copyAllRowsQueue(this)">📋 ກັອບຄິວທັງໝົດ (Auto-Fill)</button>
+    <button type="button" class="btn-primary" onclick="addRow()">➕ ບັນທຶກ</button>
+    <button type="button" class="btn-print-nav" onclick="openPrintPage()">🖨️ ໄປໜ້າ Print</button>
+    <button type="button" class="btn-queue" onclick="copyAllRowsQueue(this)">📋 ກັອບຄິວທັງໝົດ</button>
     <button type="button" onclick="downloadCSV()">⬇️ ດາວໂຫລດ(ເປີດໃນ Excel)</button>
     <button type="button" class="btn-danger" onclick="clearAll()">🗑️ ລ້າງຂໍ້ມູນທັງໝົດ</button>
   </div>
@@ -410,12 +468,20 @@
     <span id="totalStudentsCountLabel">ລາຍຊື່ນັກຮຽນທັງໝົດ: 0 ຄົນ</span>
   </div>
 
+  <div class="list-filter-bar">
+    <input id="tableSearchInput" type="text" class="list-search-input" placeholder="🔍 ຄົ້ນຫາໃນລາຍຊື່: ຊື່ / ລະຫັດ / ເບີໂທ / ບ້ານ / ປະເພດ..." oninput="onTableSearchChange()" />
+    <button type="button" id="copyFirstMatchedBtn" class="btn-filter-action" onclick="copyFirstMatchedRow(this)">📋 ກັອບຄົນທີ່ພົບ (1 ຄົນ)</button>
+    <button type="button" id="copyFilteredQueueBtn" class="btn-filter-action" onclick="copyFilteredRowsQueue(this)">📦 ກັອບສະເພາະຜົນຄົ້ນຫາ</button>
+    <button type="button" id="printFirstMatchedBtn" class="btn-filter-print" onclick="printFirstMatchedRow()">🖨️ Print ຄົນທີ່ພົບ</button>
+    <button type="button" class="btn-filter-clear" onclick="clearTableSearch()">✖ ລ້າງຄົ້ນຫາ</button>
+  </div>
+
   <div class="table-wrap">
     <table id="dataTable">
       <thead>
         <tr>
           <th>#</th>
-          <th>ສົ່ງກອກ</th>
+          <th>ສົ່ງກອກ / Print</th>
           <th>ວັນ​ທີ່​ຂໍ​ເສັງ</th>
           <th>ລະ​ຫັດ​ນັກ​ຮຽນ</th>
           <th>ຊື່ພາສາລາວ</th>

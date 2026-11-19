@@ -2,6 +2,9 @@ const STORAGE_KEY = "lao_driving_exam_rows_v2";
 const CLOUD_URL_STORAGE_KEY = "lao_driving_exam_cloud_url_v1";
 // หากต้องการให้ทุกเครื่องเชื่อมต่ออัตโนมัติโดยไม่ต้องวาง URL เอง สามารถใส่ลิงก์ Firebase Realtime DB ตรงนี้ได้เลย
 const DEFAULT_CLOUD_SYNC_URL = "https://likelao1-96736.firebaseio.com/";
+// ใส่ลิงก์ Web App URL ที่ได้จาก Google Apps Script ตรงนี้
+const GOOGLE_SHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxkoZDs4MJiCIO6ZCLzyvmcQ4FyJ4g6TyjzpLPFcSlaKrnzThMNIFb1zhrcWgti-XNn/exec";
+const PRINT_PAGE_URL = "petition_form.html";
 
 const DEFAULT_NATIONALITY = "ລາວ / LAO";
 const DEFAULT_SCHOOL_NAME = "ຮຮ.ສອນຂັບລົດບ້ານສາມັກຄີ";
@@ -11,6 +14,33 @@ const BATCH_SET_MIN = 14;
 const BATCH_SET_MAX = 30;
 const PAUSE_GAP_MS = 800; // หยุดพักเกิน 0.8 วินาที ถือว่าขึ้นคำ/ส่วนใหม่
 const SYNC_INTERVAL_MS = 2500; // ดึงข้อมูลล่าสุดทุก 2.5 วินาที
+
+const REQUIRED_FORM_FIELDS = [
+  { key: "examDate", inputId: "examDate", label: "ວັນ​ທີ່​ຂໍ​ເສັງ (วันขอสอบ)" },
+  { key: "studentCode", inputId: "studentCode", label: "ລະ​ຫັດ​ນັກ​ຮຽນ (รหัสนักเรียน)" },
+  { key: "laoName", inputId: "laoName", label: "ຊື່ພາສາລາວ (ชื่อภาษาลาว)" },
+  { key: "enName", inputId: "enName", label: "Name&Surname (ชื่อภาษาอังกฤษ)" },
+  { key: "birthDate", inputId: "birthDate", label: "ເກີດວັນ/ເດືອນ/ປີ (วันเกิด)" },
+  { key: "birthVillage", inputId: "birthVillage", label: "ເກີດຢູ່ ບ້ານ (บ้านเกิด)" },
+  { key: "district", inputId: "district", label: "ເມືອງ (เมือง)" },
+  { key: "province", inputId: "province", label: "ແຂວງ (แขวง)" },
+  { key: "nationality", inputId: "nationality", label: "ສັນຊາດ (สัญชาติ)" },
+  { key: "occupation", inputId: "occupation", label: "ອາຊີບ (อาชีพ)" },
+  { key: "batchSet", inputId: "batchSet", label: "ຊຸດ (ชุด)" },
+  { key: "phone", inputId: "phone", label: "ໂທລະສັບ (โทรศัพท์)" },
+  { key: "licenseType", inputId: "licenseType", label: "ປະ​ເພດ (ประเภทใบขับขี่)" }
+];
+
+function validateRequiredFormFields(data) {
+  const missing = [];
+  for (const f of REQUIRED_FORM_FIELDS) {
+    const val = String(data[f.key] ?? "").trim();
+    if (!val) {
+      missing.push(f);
+    }
+  }
+  return missing;
+}
 
 let rows = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
 let cloudSyncUrl = (localStorage.getItem(CLOUD_URL_STORAGE_KEY) || DEFAULT_CLOUD_SYNC_URL || "").trim();
@@ -25,12 +55,34 @@ let activeInputId = null;
 let lastResultTimeByInput = {};
 let isNewSessionByInput = {};
 
+let tableSearchKeyword = "";
+
 populateBatchSetOptions();
+bindLaoNameAutoSpacing();
 initCloudSyncUI();
 initStudentCodeField(true);
 initFixedFields();
 renderTable();
 startCloudSyncLoop();
+
+function openPrintPage(selectedIndex = null) {
+  stopVoice();
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+  } catch (_) {}
+
+  let targetUrl = PRINT_PAGE_URL;
+  if (typeof selectedIndex === "number" && selectedIndex >= 0 && selectedIndex < rows.length) {
+    const r = rows[selectedIndex];
+    const params = new URLSearchParams();
+    params.set("index", String(selectedIndex));
+    if (r && r.studentCode) {
+      params.set("code", String(r.studentCode));
+    }
+    targetUrl = `${PRINT_PAGE_URL}?${params.toString()}`;
+  }
+  window.location.href = targetUrl;
+}
 
 // สร้างตัวเลือกดรอปดาวน์ ຊຸດ ตั้งแต่ 14 ถึง 30 อัตโนมัติ (หากยังไม่มีใน HTML)
 function populateBatchSetOptions() {
@@ -130,7 +182,7 @@ function updateSyncStatusLabel(extraNote = "", forcedState = null, forcedBadgeTe
     }
   }
 
-  const timeInfo = lastSyncedAtText ? ` | ຊິງຄ໌ລ່າສຸດ: ${lastSyncedAtText}` : "";
+  const timeInfo = lastSyncedAtText ? ` | ເຊື່ອມຕໍ່ລ່າສູດ: ${lastSyncedAtText}` : "";
   const fullText = `${modeText} | ທັງໝົດ: ${rows.length} ຄົນ | ລະຫັດຖັດໄປ: ${nextCodePreview}${timeInfo}${extraNote ? ` (${extraNote})` : ""}`;
 
   if (summaryEl) {
@@ -267,6 +319,19 @@ async function pushRowToCloud(rowData) {
   lastSyncedAtText = formatCurrentClockTime();
   connectionState = "online";
   updateSyncStatusLabel("ບັນທຶກຂຶ້ນຄລາວສຳເລັດ", "online", "ເຊື່ອມຕໍ່ສຳເລັດ");
+}
+
+// ส่งข้อมูลนักเรียนไปเก็บใน Google Sheets ผ่าน Google Apps Script Web App
+async function pushRowToGoogleSheet(rowData) {
+  const sheetUrl = String(GOOGLE_SHEET_WEB_APP_URL || "").trim();
+  if (!sheetUrl) return;
+
+  await fetch(sheetUrl, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(rowData)
+  });
 }
 
 async function clearCloudDatabase() {
@@ -577,11 +642,41 @@ function formatDateWithSlash(text) {
   return rest.length > 0 ? `${base}/${rest.join("/")}` : base;
 }
 
-// จัดรูปแบบชื่อภาษาลาวให้เว้นวรรคสวยและไม่ซ้ำช่องว่าง
+// จัดรูปแบบชื่อภาษาลาวให้เว้นวรรคสวย ไม่ซ้ำช่องว่าง และแยกคำนำหน้า (ท้าว/นาง/ທ້າວ/ນາງ) ออกจากชื่ออัตโนมัติ
 function formatLaoNameSpacing(text) {
-  return String(text || "")
-    .replace(/\s+/g, " ")
-    .trim();
+  let s = String(text || "").replace(/\s+/g, " ").trim();
+  if (!s) return "";
+
+  s = s.replace(/^(ท้าว|นาง|ທ້າວ|ນາງ)(?=\S)/g, "$1 ");
+  s = s.replace(/^(ທ\.|ນ\.)(?=\S)/g, "$1 ");
+  s = s.replace(/(\s|^)(ท้าว|นาง|ທ້າວ|ນາງ)(?=[^\s])/g, "$1$2 ");
+
+  return s.replace(/\s+/g, " ").trim();
+}
+
+function bindLaoNameAutoSpacing() {
+  const laoEl = document.getElementById("laoName");
+  if (!laoEl) return;
+
+  laoEl.addEventListener("input", () => {
+    const start = laoEl.selectionStart;
+    const before = laoEl.value;
+    const formatted = formatLaoNameSpacing(before);
+    if (formatted !== before) {
+      laoEl.value = formatted;
+      if (typeof start === "number") {
+        const diff = formatted.length - before.length;
+        const nextPos = Math.max(0, start + diff);
+        laoEl.setSelectionRange(nextPos, nextPos);
+      }
+    }
+    syncEnglishNameFromLaoInput(laoEl.value);
+  });
+
+  laoEl.addEventListener("blur", () => {
+    laoEl.value = formatLaoNameSpacing(laoEl.value);
+    syncEnglishNameFromLaoInput(laoEl.value);
+  });
 }
 
 // ตรวจจับคำนำหน้าเพศจากเสียงพูด (รองรับทั้งลาว/ไทย/อังกฤษ)
@@ -917,8 +1012,17 @@ async function addRow() {
   stopVoice();
   const data = getFormValues();
 
-  if (!data.laoName && !data.enName && !data.studentCode) {
-    alert("กรุณากรอกหรือพูด ຊື່ພາສາລາວ, Name&Surname หรือ ລະຫັດນັກຮຽນ อย่างน้อย 1 ช่องก่อนครับ");
+  const missingFields = validateRequiredFormFields(data);
+  if (missingFields.length > 0) {
+    const missingLines = missingFields.map((f, i) => `${i + 1}. ${f.label}`).join("\n");
+    alert(`ไม่สามารถบันทึกได้ครับ กรุณากรอกข้อมูลให้ครบทุกช่องก่อน\n\nช่องที่ยังว่างอยู่ (${missingFields.length} ช่อง):\n${missingLines}`);
+    const firstEl = document.getElementById(missingFields[0].inputId);
+    if (firstEl) {
+      firstEl.focus();
+      if (typeof firstEl.scrollIntoView === "function") {
+        firstEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
     return;
   }
 
@@ -949,6 +1053,12 @@ async function addRow() {
       connectionState = "offline";
       updateSyncStatusLabel(`ບັນທຶກໃນເຄື່ອງແລ້ວ (ອອນລາຍຂັດຂ້ອງ: ${err.message})`, "offline", "ເຊື່ອມຕໍ່ບໍ່ໄດ້");
     }
+  }
+
+  if (GOOGLE_SHEET_WEB_APP_URL) {
+    try {
+      await pushRowToGoogleSheet(data);
+    } catch (_) {}
   }
 
   const autoNextCode = computeNextGlobalStudentCode(data.studentCode || DEFAULT_INITIAL_STUDENT_CODE);
@@ -1037,16 +1147,108 @@ function copyAllRowsQueue(btnEl) {
   });
 }
 
+function matchesTableSearch(r, keyword) {
+  const q = String(keyword || "").trim().toLowerCase();
+  if (!q) return true;
+  const hay = [
+    r.studentCode,
+    r.laoName,
+    r.enName,
+    r.phone,
+    r.birthVillage,
+    r.district,
+    r.province,
+    r.licenseType,
+    r.batchSet
+  ]
+    .map((v) => String(v || "").toLowerCase())
+    .join(" ");
+  return hay.includes(q);
+}
+
+function getFilteredRowEntries() {
+  return rows
+    .map((r, idx) => ({ row: r, idx }))
+    .filter(({ row }) => matchesTableSearch(row, tableSearchKeyword));
+}
+
+function onTableSearchChange() {
+  const inp = document.getElementById("tableSearchInput");
+  tableSearchKeyword = inp ? inp.value : "";
+  renderTable();
+}
+
+function clearTableSearch() {
+  tableSearchKeyword = "";
+  const inp = document.getElementById("tableSearchInput");
+  if (inp) inp.value = "";
+  renderTable();
+}
+
+function copyFirstMatchedRow(btnEl) {
+  const matched = getFilteredRowEntries();
+  if (!matched.length) {
+    alert("ไม่พบรายชื่อที่ตรงกับคำค้นหาครับ");
+    return;
+  }
+  copyRowForAutoFill(matched[0].idx, btnEl);
+}
+
+function copyFilteredRowsQueue(btnEl) {
+  const matched = getFilteredRowEntries();
+  if (!matched.length) {
+    alert("ไม่พบรายชื่อที่ตรงกับคำค้นหาครับ");
+    return;
+  }
+  const queuePayload = JSON.stringify({
+    source: "lao_driving_exam_queue",
+    rows: matched.map(({ row, idx }) => buildAutoFillPayload(row, idx))
+  });
+  writeClipboardSafe(queuePayload, () => {
+    if (!btnEl) return;
+    const orig = btnEl.dataset.origText || btnEl.textContent;
+    btnEl.dataset.origText = orig;
+    btnEl.textContent = `✅ ກັອບຜົນຄົ້ນຫາ ${matched.length} ຄົນແລ້ວ`;
+    setTimeout(() => {
+      btnEl.textContent = orig;
+    }, 1500);
+  });
+}
+
+function printFirstMatchedRow() {
+  const matched = getFilteredRowEntries();
+  if (!matched.length) {
+    alert("ไม่พบรายชื่อที่ตรงกับคำค้นหาสำหรับพิมพ์ครับ");
+    return;
+  }
+  openPrintPage(matched[0].idx);
+}
+
 function renderTable() {
   const tbody = document.querySelector("#dataTable tbody");
   if (!tbody) return;
   tbody.innerHTML = "";
 
-  rows.forEach((r, idx) => {
+  const entries = getFilteredRowEntries();
+
+  if (!entries.length) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="17" style="text-align:center;color:#64748b;padding:14px;">${
+      tableSearchKeyword.trim() ? "ບໍ່ພົບລາຍຊື່ທີ່ກົງກັບຄຳຄົ້ນຫາ" : "ຍັງບໍ່ມີຂໍ້ມູນນັກຮຽນ"
+    }</td>`;
+    tbody.appendChild(tr);
+    updateSyncStatusLabel();
+    return;
+  }
+
+  entries.forEach(({ row: r, idx }) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${idx + 1}</td>
-      <td><button type="button" class="copy-btn" onclick="copyRowForAutoFill(${idx}, this)">📋 ສົ່ງໄປກອກ</button></td>
+      <td>
+        <button type="button" class="copy-btn" onclick="copyRowForAutoFill(${idx}, this)">📋 ສົ່ງໄປກອກ</button>
+        <button type="button" class="row-print-btn" onclick="openPrintPage(${idx})">🖨️ Print</button>
+      </td>
       <td>${escapeHtml(r.examDate)}</td>
       <td>${escapeHtml(r.studentCode)}</td>
       <td>${escapeHtml(r.laoName)}</td>
@@ -1066,7 +1268,9 @@ function renderTable() {
     tbody.appendChild(tr);
   });
 
-  updateSyncStatusLabel();
+  updateSyncStatusLabel(
+    tableSearchKeyword.trim() ? `ສະແດງຜົນຄົ້ນຫາ ${entries.length}/${rows.length} ຄົນ` : ""
+  );
 }
 
 function escapeCSV(val) {
